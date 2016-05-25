@@ -1,0 +1,133 @@
+import org.javalite.instrumentation.Instrumentation
+
+buildscript {
+    repositories { jcenter() }
+    dependencies {
+        classpath "com.github.jengelman.gradle.plugins:shadow:1.2.2"
+        classpath group: 'org.javalite', name: 'activejdbc', version: '1.4.11'
+        classpath group: 'org.javalite', name: 'activejdbc-instrumentation', version: '1.4.11'
+    }
+}
+
+plugins {
+    id 'java' // or 'groovy' Must be explicitly applied
+    id 'com.github.johnrengelman.shadow' version "1.2.2"
+}
+
+defaultTasks 'shadowJar'
+
+if (!JavaVersion.current().java8Compatible) {
+    throw new IllegalStateException('''Nucleus:
+                                      |  This needs Java 8,
+                                      |  You are using something else,
+                                      |  Refresh. Try again.'''.stripMargin())
+}
+
+// Define a version registry so that we can avoid hard coding of the version numbers
+// Note that this applies only to dependencies and not to the plugins and build
+ext {
+    vertxVersion = '3.2.1'
+    slf4jVersion = '1.7.12'
+    junitVersion = '4.12'
+    logbackVersion = '1.0.13'
+    hikariVersion = '2.4.3'
+    postgresVersion = '9.4-1206-jdbc42'
+}
+
+version = "0.1-snapshot"
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    maven {
+        url = 'http://oss.sonatype.org/content/repositories/snapshots/'
+    }
+}
+
+dependencies {
+    // Vertx specific dependencies
+    compile "io.vertx:vertx-core:${vertxVersion}"
+    compile "io.vertx:vertx-hazelcast:${vertxVersion}"
+    compile "io.vertx:vertx-web:${vertxVersion}"
+    compile "io.vertx:vertx-dropwizard-metrics:${vertxVersion}"
+
+
+    // Other dependencies
+    compile "ch.qos.logback:logback-classic:${logbackVersion}"
+    compile "com.zaxxer:HikariCP:${hikariVersion}"
+    compile "org.postgresql:postgresql:${postgresVersion}"
+    // active jdbc
+    compile 'org.javalite:activejdbc:1.4.11'
+    compile 'org.javalite:activejdbc-instrumentation:1.4.11'
+	
+	//Astyanax and datstax driver
+	compile 'com.datastax.cassandra:cassandra-driver-core:3.0.0'
+	compile 'com.netflix.astyanax:astyanax:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-cassandra:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-thrift:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-recipes:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-queue:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-cql:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-core:3.9.0'
+	compile 'com.netflix.astyanax:astyanax-contrib:3.9.0'
+	
+	// http://mvnrepository.com/artifact/commons-lang/commons-lang
+	compile group: 'commons-lang', name: 'commons-lang', version: '2.2'
+	
+    // Test dependencies
+    testCompile "junit:junit:${junitVersion}"
+}
+
+shadowJar {
+    classifier = 'fat'
+    manifest {
+        attributes 'Main-Class': 'io.vertx.core.Launcher'
+        attributes 'Main-Verticle': 'org.gooru.nucleus.reports.infra.bootstrap.DeployVerticle'
+        attributes 'Created-By': 'Gooru.org'
+    }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.7'
+}
+
+// from the Griffon ActiveJDBC plugin
+def addUrlIfNotPresent(to, what) {
+
+    if (!to || !what) {
+        return
+    }
+    def urls = to.URLs.toList()
+    switch (what.class) {
+        case URL: what = new File(what.toURI()); break
+        case String: what = new File(what); break
+        case GString: what = new File(what.toString()); break
+        case File: break; // ok
+        default:
+            println "Don't know how to deal with $what as it is not an URL nor a File"
+            System.exit(1)
+    }
+
+    if (what.directory && !what.exists()) {
+        what.mkdirs()
+    }
+    def url = what.toURI().toURL()
+    if (!urls.contains(url) && (what.directory || !urls.find { it.path.endsWith(what.name) })) {
+        to.addURL(url)
+    }
+}
+
+// from the Griffon ActiveJDBC plugin
+compileJava.doLast {
+    println("In compileJava.doLast")
+    Instrumentation instrumentation = new Instrumentation()
+    def projectMainClassesDir = sourceSets.main.output.classesDir.getPath()
+    def rootLoader = this.class.classLoader.rootLoader
+    instrumentation.outputDirectory = projectMainClassesDir
+    addUrlIfNotPresent rootLoader, projectMainClassesDir
+    addUrlIfNotPresent Instrumentation.class.classLoader, projectMainClassesDir
+    instrumentation.instrument()
+    def activejdbcInstrumentSpyFile = new File(".activejdbc_instrument")
+    activejdbcInstrumentSpyFile.text = new Date().toString()
+}

@@ -1,0 +1,24 @@
+{
+  "comment": "This is bundled JSON file. Idea is that we should externalize this also as part of build. Currently this is going to hold the dev env information",
+  "defaultDataSource": {
+    	"cassandra.seeds":"127.0.0.1",
+	"cassandra.cluster":"archive",
+	"cassandra.datacenter":"datacenter1",
+	"cassandra.keyspace":"event_logger_insights"
+  },
+  "org.gooru.nucleus.reports.download.DownloadReportVerticle": {
+    "instances": 1,
+    "worker": false,
+    "config": {}
+  },
+  "org.gooru.nucleus.reports.infra.server.HttpVerticle": {
+    "instances": 1,
+    "worker": false,
+    "config": {
+      "http.port": 8081,
+      "metrics.periodicity.seconds": 300,
+      "message.bus.send.timeout.seconds": 10,
+      "request.body.size.max.mb": 5
+    }
+  }
+}
